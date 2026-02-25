@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bernoulli's Principle</title>
+
+<style>
+  :root {
+    --bg: #ffffff;
+    --panel: #f5f7fa;
+    --border: #d0d7e2;
+    --cyan: #1565c0;
+    --amber: #e65100;
+    --red: #c62828;
+    --green: #2e7d32;
+    --text: #1a1a2e;
+    --dim: #666e80;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: Arial, Helvetica, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+    overflow-x: hidden;
+  }
+  .everything { position: relative; z-index: 1; width: 100%; max-width: 900px; }
+  header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  header h1 {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: clamp(1.2rem, 4vw, 1.8rem);
+    font-weight: 700;
+    color: var(--cyan);
+    letter-spacing: 0.04em;
+  }
+  header p {
+    color: var(--dim);
+    font-size: 0.78rem;
+    margin-top: 6px;
+    letter-spacing: 0.05em;
+  }
+
+  /* Canvas area */
+  .sim-wrapper {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px;
+    position: relative;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    border-radius: 2px;
+  }
+
+  /* Controls */
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+    margin-top: 14px;
+  }
+  .control-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 16px;
+  }
+  .control-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 10px;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    color: var(--dim);
+    text-transform: uppercase;
+  }
+  .control-label span.val {
+    color: var(--cyan);
+    font-size: 0.9rem;
+  }
+  input[type=range] {
+    width: 100%;
+    -webkit-appearance: none;
+    height: 3px;
+    background: var(--border);
+    outline: none;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 8px var(--cyan);
+    cursor: pointer;
+  }
+
+  /* Readouts */
+  .readouts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-top: 14px;
+  }
+  .readout {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .readout::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .readout.zone-a::after { background: var(--green); }
+  .readout.zone-b::after { background: var(--red); }
+  .readout.zone-c::after { background: var(--green); }
+  .readout-zone {
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .readout-val {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+  .zone-a .readout-val { color: var(--green); }
+  .zone-b .readout-val { color: var(--red); }
+  .zone-c .readout-val { color: var(--green); }
+  .readout-unit {
+    font-size: 0.65rem;
+    color: var(--dim);
+    margin-top: 4px;
+  }
+
+  /* Equation */
+  .equation {
+    margin-top: 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 20px;
+    text-align: center;
+    color: var(--amber);
+    font-size: 0.88rem;
+    letter-spacing: 0.06em;
+  }
+  .equation .label {
+    color: var(--dim);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+
+  /* Mode toggle */
+  .mode-toggle {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+    justify-content: center;
+  }
+  .mode-btn {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 7px 18px;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    background: var(--panel);
+    color: var(--dim);
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.04em;
+  }
+  .mode-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+  .mode-btn.active {
+    background: var(--cyan);
+    border-color: var(--cyan);
+    color: #fff;
+  }
+
+  @media (max-width: 660px) {
+    .controls { grid-template-columns: 1fr; }
+    .readouts { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="everything">
+  <header>
+    <h1>BERNOULLI'S PRINCIPLE</h1>
+    <p>VENTURI EFFECT — INTERACTIVE FLOW SIMULATION</p>
+  </header>
+
+  <div class="sim-wrapper">
+    <canvas id="sim" height="380"></canvas>
+  </div>
+
+  <div class="mode-toggle">
+    <button class="mode-btn active" data-mode="particles">Particles</button>
+    <button class="mode-btn" data-mode="streamlines">Streamlines</button>
+    <button class="mode-btn" data-mode="both">Both</button>
+  </div>
+
+  <div class="controls">
+    <div class="control-card">
+      <div class="control-label">Flow Velocity <span class="val" id="velLabel">5.0 m/s</span></div>
+      <input type="range" id="velSlider" min="1" max="15" step="0.5" value="5">
+    </div>
+    <div class="control-card">
+      <div class="control-label">Throat Constriction <span class="val" id="constLabel">50%</span></div>
+      <input type="range" id="constSlider" min="20" max="200" step="1" value="50">
+    </div>
+    <div class="control-card">
+      <div class="control-label">Outlet Height Δh <span class="val" id="heightLabel">0.0 m</span></div>
+      <input type="range" id="heightSlider" min="-5" max="5" step="0.1" value="0">
+    </div>
+  </div>
+
+  <div class="readouts">
+    <div class="readout zone-a">
+      <div class="readout-zone">Zone A — Inlet</div>
+      <div class="readout-val" id="vA">—</div>
+      <div class="readout-unit">VELOCITY (m/s)</div>
+      <div class="readout-val" id="pA" style="margin-top:8px; font-size:0.85rem">—</div>
+      <div class="readout-unit">PRESSURE (Pa)</div>
+      <div class="readout-val" id="hA" style="margin-top:8px; font-size:0.85rem; color:#555">0.0 m</div>
+      <div class="readout-unit">ELEVATION</div>
+    </div>
+    <div class="readout zone-b">
+      <div class="readout-zone">Zone B — Throat</div>
+      <div class="readout-val" id="vB">—</div>
+      <div class="readout-unit">VELOCITY (m/s)</div>
+      <div class="readout-val" id="pB" style="margin-top:8px; font-size:0.85rem">—</div>
+      <div class="readout-unit">PRESSURE (Pa)</div>
+      <div class="readout-val" id="hB" style="margin-top:8px; font-size:0.85rem; color:#555">—</div>
+      <div class="readout-unit">ELEVATION</div>
+    </div>
+    <div class="readout zone-c">
+      <div class="readout-zone">Zone C — Outlet</div>
+      <div class="readout-val" id="vC">—</div>
+      <div class="readout-unit">VELOCITY (m/s)</div>
+      <div class="readout-val" id="pC" style="margin-top:8px; font-size:0.85rem">—</div>
+      <div class="readout-unit">PRESSURE (Pa)</div>
+      <div class="readout-val" id="hC" style="margin-top:8px; font-size:0.85rem; color:#555">—</div>
+      <div class="readout-unit">ELEVATION</div>
+    </div>
+  </div>
+
+  <div class="equation">
+    <div class="label">Bernoulli's Equation (steady, incompressible flow)</div>
+    <span id="eqDisplay">P + ½ρv² + ρgh = constant</span>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('sim');
+const ctx = canvas.getContext('2d');
+const velSlider = document.getElementById('velSlider');
+const constSlider = document.getElementById('constSlider');
+const heightSlider = document.getElementById('heightSlider');
+
+let particles = [];
+let vizMode = 'particles';
+const DENSITY = 1000;
+const BASE_PRESSURE = 101325;
+
+// Mode toggle
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    vizMode = btn.dataset.mode;
+  });
+});
+
+const G = 9.81; // m/s²
+
+function getParams() {
+  const v1 = parseFloat(velSlider.value);
+  const constriction = parseFloat(constSlider.value) / 100;
+  const deltaH = parseFloat(heightSlider.value); // outlet height relative to inlet
+  const areaRatio = 1 / constriction;
+  const v2 = v1 * areaRatio; // throat velocity (continuity)
+  const hA = 0;
+  const hB = deltaH * 0.5; // throat at midpoint elevation
+  const hC = deltaH;
+  const p1 = BASE_PRESSURE;
+  // Full Bernoulli: P + ½ρv² + ρgh = const
+  const bernoulliConst = p1 + 0.5 * DENSITY * v1 * v1 + DENSITY * G * hA;
+  const pB = bernoulliConst - 0.5 * DENSITY * v2 * v2 - DENSITY * G * hB;
+  const pC = bernoulliConst - 0.5 * DENSITY * v1 * v1 - DENSITY * G * hC;
+  return { v1, v2, p1, pB, pC, constriction, deltaH, hA, hB, hC, bernoulliConst };
+}
+
+function getPipeProfile(W, H, constriction, deltaH) {
+  const pxPerMeter = 18; // visual scale for height
+  const tiltPx = deltaH * pxPerMeter; // positive deltaH → outlet higher → shift up at right
+
+  // Base horizontal pipe geometry
+  const pipeTop = H * 0.35;
+  const pipeBot = H * 0.65;
+  const pipeH = pipeBot - pipeTop;
+  const throatH = pipeH * constriction;
+  const margin = (pipeH - throatH) / 2;
+  const throatTop = pipeTop + margin;
+  const throatBot = pipeBot - margin;
+
+  // x positions
+  const x0 = W * 0.12;  // leave room for height ruler
+  const x1 = W * 0.30;
+  const x2 = W * 0.42;
+  const x3 = W * 0.58;
+  const x4 = W * 0.70;
+  const x5 = W * 0.92;
+
+  // tilt offset at a given x: linear from 0 at x0 to -tiltPx at x5
+  function tilt(x) {
+    return -tiltPx * (x - x0) / (x5 - x0);
+  }
+
+  const topWall = [
+    {x: x0, y: pipeTop + tilt(x0)},
+    {x: x1, y: pipeTop + tilt(x1)},
+    {x: x2, y: throatTop + tilt(x2)},
+    {x: x3, y: throatTop + tilt(x3)},
+    {x: x4, y: pipeTop + tilt(x4)},
+    {x: x5, y: pipeTop + tilt(x5)},
+  ];
+  const botWall = [
+    {x: x0, y: pipeBot + tilt(x0)},
+    {x: x1, y: pipeBot + tilt(x1)},
+    {x: x2, y: throatBot + tilt(x2)},
+    {x: x3, y: throatBot + tilt(x3)},
+    {x: x4, y: pipeBot + tilt(x4)},
+    {x: x5, y: pipeBot + tilt(x5)},
+  ];
+
+  // Effective top/bot at x0 and x5 for labels
+  const pipeTopAtX0 = pipeTop + tilt(x0);
+  const pipeBotAtX0 = pipeBot + tilt(x0);
+  const pipeTopAtX5 = pipeTop + tilt(x5);
+  const pipeBotAtX5 = pipeBot + tilt(x5);
+
+  return { topWall, botWall, pipeTop, pipeBot, throatTop, throatBot,
+           x0, x1, x2, x3, x4, x5, tilt,
+           pipeTopAtX0, pipeBotAtX0, pipeTopAtX5, pipeBotAtX5 };
+}
+
+// Interpolate y position for particle within pipe
+function getPipeY(xNorm, profile, yNorm) {
+  // xNorm 0..1 position, yNorm 0..1 (top to bot)
+  const {topWall, botWall} = profile;
+  // find top and bot y at given x
+  function yAtX(wall, x) {
+    for (let i = 0; i < wall.length - 1; i++) {
+      if (x >= wall[i].x && x <= wall[i+1].x) {
+        const t = (x - wall[i].x) / (wall[i+1].x - wall[i].x);
+        return wall[i].y + t * (wall[i+1].y - wall[i].y);
+      }
+    }
+    return wall[wall.length-1].y;
+  }
+  const top = yAtX(topWall, xNorm);
+  const bot = yAtX(botWall, xNorm);
+  return top + yNorm * (bot - top);
+}
+
+function getVelocityAtX(x, profile, params) {
+  const {x1, x2, x3, x4, x5} = profile;
+  const W = canvas.width;
+  if (x < x2) return params.v1;
+  if (x > x3) return params.v1;
+  return params.v2;
+}
+
+// Particle speed multiplier for visual speed
+function getVisualSpeed(x, profile, params) {
+  const {x1, x2, x3, x4, x5} = profile;
+  if (x >= x2 && x <= x3) return params.v2 / params.v1;
+  if (x > x1 && x < x2) {
+    const t = (x - x1) / (x2 - x1);
+    return 1 + t * (params.v2 / params.v1 - 1);
+  }
+  if (x > x3 && x < x4) {
+    const t = (x - x3) / (x4 - x3);
+    return params.v2 / params.v1 + t * (1 - params.v2 / params.v1);
+  }
+  return 1;
+}
+
+function initParticles(profile, count = 80) {
+  particles = [];
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x: Math.random() * canvas.width,
+      yNorm: Math.random(),
+      speed: 1,
+    });
+  }
+}
+
+function drawPipe(profile, params) {
+  const {topWall, botWall} = profile;
+  const W = canvas.width, H = canvas.height;
+
+  // Pressure color zones
+  const zones = [
+    { x: profile.x0, w: profile.x2 - profile.x0, color: 'rgba(46,125,50,0.08)' },
+    { x: profile.x2, w: profile.x3 - profile.x2, color: 'rgba(198,40,40,0.10)' },
+    { x: profile.x3, w: profile.x5 - profile.x3, color: 'rgba(46,125,50,0.08)' },
+  ];
+  zones.forEach(z => {
+    ctx.save();
+    ctx.beginPath();
+    // clip to pipe region
+    ctx.rect(z.x, 0, z.w, H);
+    ctx.clip();
+    // fill pipe area
+    ctx.beginPath();
+    topWall.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    botWall.slice().reverse().forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.closePath();
+    ctx.fillStyle = z.color;
+    ctx.fill();
+    ctx.restore();
+  });
+
+  // Pipe fill
+  ctx.beginPath();
+  topWall.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+  botWall.slice().reverse().forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(220,235,255,0.85)';
+  ctx.fill();
+
+  // Pipe walls
+  ctx.beginPath();
+  topWall.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+  ctx.strokeStyle = '#1565c0';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  ctx.beginPath();
+  botWall.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+  ctx.strokeStyle = '#1565c0';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // Zone labels (positioned above tilted pipe)
+  const labelStyle = (color) => { ctx.fillStyle = color; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center'; };
+  labelStyle('#2e7d32');
+  ctx.fillText('A', (profile.x0 + profile.x2) / 2, profile.pipeTopAtX0 - 12);
+  labelStyle('#c62828');
+  ctx.fillText('B', (profile.x2 + profile.x3) / 2, profile.topWall[2].y - 12);
+  labelStyle('#2e7d32');
+  ctx.fillText('C', (profile.x3 + profile.x5) / 2, profile.pipeTopAtX5 - 12);
+
+  drawHeightMarkers(profile, params);
+  drawPressureArrows(profile, params);
+}
+
+function drawHeightMarkers(profile, params) {
+  const { deltaH } = params;
+  if (Math.abs(deltaH) < 0.05) return;
+
+  const W = canvas.width, H = canvas.height;
+
+  // Draw vertical elevation arrows on left (inlet) and right (outlet) sides
+  // Inlet ground reference line
+  const inletCenterY = (profile.pipeTopAtX0 + profile.pipeBotAtX0) / 2;
+  const outletCenterY = (profile.pipeTopAtX5 + profile.pipeBotAtX5) / 2;
+
+  // Ground reference: inlet is at y = inletCenterY, outlet elevated/depressed
+  const pxPerMeter = 18;
+  const arrowColor = deltaH > 0 ? '#c62828' : '#1565c0';
+
+  // Draw a dashed horizontal datum line at inlet center height
+  ctx.save();
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = '#aaa';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(profile.x0 - 30, inletCenterY);
+  ctx.lineTo(profile.x5 + 20, inletCenterY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Vertical double-headed arrow on the right showing Δh
+  const rx = profile.x5 + 14;
+  const y1 = inletCenterY;
+  const y2 = outletCenterY;
+  if (Math.abs(y1 - y2) > 4) {
+    ctx.strokeStyle = arrowColor;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(rx, y1);
+    ctx.lineTo(rx, y2);
+    ctx.stroke();
+    // arrowheads
+    [[y2, -1], [y1, 1]].forEach(([y, dir]) => {
+      ctx.beginPath();
+      ctx.moveTo(rx, y);
+      ctx.lineTo(rx - 4, y + dir * 7);
+      ctx.lineTo(rx + 4, y + dir * 7);
+      ctx.closePath();
+      ctx.fillStyle = arrowColor;
+      ctx.fill();
+    });
+    // label
+    ctx.fillStyle = arrowColor;
+    ctx.font = 'bold 10px Arial';
+    ctx.textAlign = 'left';
+    const midY = (y1 + y2) / 2;
+    ctx.fillText(`Δh=${deltaH > 0 ? '+' : ''}${deltaH.toFixed(1)}m`, rx + 8, midY + 4);
+  }
+
+  // Small elevation markers at inlet and outlet pipe centerlines
+  ctx.fillStyle = '#555';
+  ctx.font = '9px Arial';
+  ctx.textAlign = 'right';
+  ctx.fillText('h=0', profile.x0 - 4, inletCenterY + 4);
+  ctx.textAlign = 'left';
+  ctx.fillText(`h=${deltaH.toFixed(1)}m`, profile.x5 + 4, outletCenterY + 4);
+
+  ctx.restore();
+}
+
+
+function drawPressureArrows(profile, params) {
+  const maxArrow = 36;
+  const normP1 = 1.0;
+  const normPB = Math.max(0.05, (params.pB - BASE_PRESSURE * 0.7) / (params.p1 - BASE_PRESSURE * 0.7));
+  const normPC = Math.max(0.05, (params.pC - BASE_PRESSURE * 0.7) / (params.p1 - BASE_PRESSURE * 0.7));
+
+  function topAtX(x) {
+    const wall = profile.topWall;
+    for (let i = 0; i < wall.length - 1; i++) {
+      if (x >= wall[i].x && x <= wall[i+1].x) {
+        const t = (x - wall[i].x) / (wall[i+1].x - wall[i].x);
+        return wall[i].y + t * (wall[i+1].y - wall[i].y);
+      }
+    }
+    return wall[wall.length-1].y;
+  }
+
+  function arrow(x, yBase, len, color) {
+    const yStart = yBase - len;
+    const yEnd = yBase;
+    ctx.beginPath();
+    ctx.moveTo(x, yStart);
+    ctx.lineTo(x, yEnd);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, yEnd);
+    ctx.lineTo(x - 4, yEnd - 8);
+    ctx.lineTo(x + 4, yEnd - 8);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  const n = 3;
+  for (let i = 0; i < n; i++) {
+    const x = profile.x0 + (i + 1) * (profile.x2 - profile.x0) / (n + 1);
+    arrow(x, topAtX(x) - 4, maxArrow * normP1, 'rgba(46,125,50,0.85)');
+  }
+  const xB = (profile.x2 + profile.x3) / 2;
+  arrow(xB, topAtX(xB) - 4, Math.max(6, maxArrow * normPB), 'rgba(198,40,40,0.85)');
+  for (let i = 0; i < n; i++) {
+    const x = profile.x3 + (i + 1) * (profile.x5 - profile.x3) / (n + 1);
+    const len = Math.max(6, maxArrow * normPC);
+    const col = normPC >= 0.8 ? 'rgba(46,125,50,0.85)' : 'rgba(198,40,40,0.85)';
+    arrow(x, topAtX(x) - 4, len, col);
+  }
+
+  ctx.fillStyle = '#888';
+  ctx.font = '9px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('PRESSURE ↓', 6, 14);
+}
+
+function drawParticles(profile, params) {
+  particles.forEach(p => {
+    const speedMul = getVisualSpeed(p.x, profile, params);
+    const baseSpeed = (params.v1 / 5) * 1.5;
+    p.x += baseSpeed * speedMul;
+    if (p.x > canvas.width) {
+      p.x = 0;
+      p.yNorm = Math.random();
+    }
+
+    const py = getPipeY(p.x, profile, p.yNorm);
+    const inThroat = p.x >= profile.x2 && p.x <= profile.x3;
+
+    ctx.beginPath();
+    ctx.arc(p.x, py, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = inThroat ? 'rgba(198,40,40,0.8)' : 'rgba(21,101,192,0.7)';
+    ctx.fill();
+  });
+}
+
+function drawStreamlines(profile, params) {
+  const NUM_LINES = 9;
+  const W = canvas.width;
+
+  // Streamlines are drawn at evenly spaced yNorm values across inlet.
+  // By continuity, their y positions compress/expand inside the throat.
+  // We trace each streamline by stepping in x and remapping yNorm via local height ratio.
+
+  // Build x sample points across the pipe
+  const steps = 120;
+  const xs = [];
+  for (let i = 0; i <= steps; i++) xs.push(profile.x0 + i * (profile.x5 - profile.x0) / steps);
+
+  // Reference height at inlet (x0) for remapping
+  function pipeTopAtX(x) {
+    const wall = profile.topWall;
+    for (let i = 0; i < wall.length - 1; i++) {
+      if (x >= wall[i].x && x <= wall[i+1].x) {
+        const t = (x - wall[i].x) / (wall[i+1].x - wall[i].x);
+        return wall[i].y + t * (wall[i+1].y - wall[i].y);
+      }
+    }
+    return wall[wall.length-1].y;
+  }
+  function pipeBotAtX(x) {
+    const wall = profile.botWall;
+    for (let i = 0; i < wall.length - 1; i++) {
+      if (x >= wall[i].x && x <= wall[i+1].x) {
+        const t = (x - wall[i].x) / (wall[i+1].x - wall[i].x);
+        return wall[i].y + t * (wall[i+1].y - wall[i].y);
+      }
+    }
+    return wall[wall.length-1].y;
+  }
+
+  // Clip drawing to inside pipe
+  ctx.save();
+  ctx.beginPath();
+  profile.topWall.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+  profile.botWall.slice().reverse().forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.closePath();
+  ctx.clip();
+
+  for (let li = 0; li < NUM_LINES; li++) {
+    // yNorm at inlet (0=top wall, 1=bot wall)
+    const yNorm0 = (li + 1) / (NUM_LINES + 1);
+
+    ctx.beginPath();
+    let first = true;
+    for (let xi = 0; xi < xs.length; xi++) {
+      const x = xs[xi];
+      const top = pipeTopAtX(x);
+      const bot = pipeBotAtX(x);
+      const y = top + yNorm0 * (bot - top);
+      if (first) { ctx.moveTo(x, y); first = false; }
+      else ctx.lineTo(x, y);
+    }
+
+    // Color streamlines: blue in wide sections, red in throat
+    // Use a gradient or just a single color with opacity
+    const speedRatio = params.v2 / params.v1;
+    // mid of pipe is throat
+    const hue = speedRatio > 1 ? `rgba(198,40,40,0.75)` : `rgba(21,101,192,0.65)`;
+    ctx.strokeStyle = 'rgba(21,101,192,0.55)';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Draw arrowheads along streamlines at a few x positions
+  const arrowXs = [
+    profile.x0 + (profile.x2 - profile.x0) * 0.5,
+    (profile.x2 + profile.x3) / 2,
+    profile.x3 + (profile.x5 - profile.x3) * 0.5,
+  ];
+
+  arrowXs.forEach(ax => {
+    const inThroat = ax >= profile.x2 && ax <= profile.x3;
+    const color = inThroat ? 'rgba(198,40,40,0.8)' : 'rgba(21,101,192,0.7)';
+    for (let li = 0; li < NUM_LINES; li++) {
+      const yNorm0 = (li + 1) / (NUM_LINES + 1);
+      const top = pipeTopAtX(ax);
+      const bot = pipeBotAtX(ax);
+      const y = top + yNorm0 * (bot - top);
+      // small rightward arrowhead
+      const aw = inThroat ? 7 : 5;
+      ctx.beginPath();
+      ctx.moveTo(ax + aw, y);
+      ctx.lineTo(ax, y - 3);
+      ctx.lineTo(ax, y + 3);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+  });
+}
+
+function updateReadouts(params) {
+  document.getElementById('velLabel').textContent = `${params.v1.toFixed(1)} m/s`;
+  document.getElementById('constLabel').textContent = `${Math.round(parseFloat(constSlider.value))}%`;
+  document.getElementById('heightLabel').textContent = `${params.deltaH >= 0 ? '+' : ''}${params.deltaH.toFixed(1)} m`;
+
+  document.getElementById('vA').textContent = params.v1.toFixed(2);
+  document.getElementById('vB').textContent = params.v2.toFixed(2);
+  document.getElementById('vC').textContent = params.v1.toFixed(2);
+
+  document.getElementById('pA').textContent = (params.p1 / 1000).toFixed(2) + ' k';
+  document.getElementById('pB').textContent = (Math.max(0, params.pB) / 1000).toFixed(2) + ' k';
+  document.getElementById('pC').textContent = (Math.max(0, params.pC) / 1000).toFixed(2) + ' k';
+
+  document.getElementById('hA').textContent = `${params.hA.toFixed(1)} m`;
+  document.getElementById('hB').textContent = `${params.hB.toFixed(1)} m`;
+  document.getElementById('hC').textContent = `${params.hC.toFixed(1)} m`;
+
+  document.getElementById('eqDisplay').textContent =
+    `P + ½ρv² + ρgh = ${params.bernoulliConst.toFixed(0)} J/m³`;
+}
+
+function getProfile() {
+  const params = getParams();
+  return getPipeProfile(canvas.width, canvas.height, params.constriction, params.deltaH);
+}
+
+function resize() {
+  const wrapper = canvas.parentElement;
+  canvas.width = wrapper.clientWidth - 32;
+  canvas.height = 380;
+  initParticles(getProfile());
+}
+
+function loop() {
+  const params = getParams();
+  const profile = getPipeProfile(canvas.width, canvas.height, params.constriction, params.deltaH);
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawPipe(profile, params);
+  if (vizMode === 'particles' || vizMode === 'both') drawParticles(profile, params);
+  if (vizMode === 'streamlines' || vizMode === 'both') drawStreamlines(profile, params);
+  updateReadouts(params);
+
+  requestAnimationFrame(loop);
+}
+
+velSlider.addEventListener('input', () => { initParticles(getProfile()); });
+constSlider.addEventListener('input', () => { initParticles(getProfile()); });
+heightSlider.addEventListener('input', () => { initParticles(getProfile()); });
+
+window.addEventListener('resize', resize);
+resize();
+loop();
+</script>
+</body>
+</html>
