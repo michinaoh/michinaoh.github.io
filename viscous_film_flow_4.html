@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>斜面を流れる粘性流体 — 速度分布シミュレーション</title>
+<style>
+  :root{
+    --bg:        #0c1418;
+    --bg2:       #0f1d23;
+    --panel:     #122930;
+    --ink:       #e7f1ef;
+    --muted:     #7fa3a0;
+    --line:      #1f3b42;
+    --fluid:     #41d6c3;   /* 流体・自由表面 */
+    --fluid-dim: #1c6b66;
+    --vec:       #ffb74d;   /* 速度ベクトル */
+    --vec-bright:#ffd089;
+    --ground:    #243239;
+    --grav:      #ff6b6b;
+    --shear:     #c792ea;   /* せん断応力 */
+    --shear-bright:#e0c2ff;
+    --accent:    #41d6c3;
+    --font:      "Calibri","Segoe UI","Meiryo",メイリオ,"Hiragino Kaku Gothic ProN","ヒラギノ角ゴ ProN","Yu Gothic UI","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(1200px 600px at 78% -10%, #14323a 0%, transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font);
+    font-size:17px;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding:28px 18px 56px;
+  }
+  .wrap{max-width:1080px;margin:0 auto}
+  header{margin-bottom:18px;position:relative}
+  .kicker{
+    font-size:14px;letter-spacing:.28em;text-transform:uppercase;color:var(--muted);
+    display:flex;align-items:center;gap:10px;margin-bottom:10px;
+  }
+  .kicker::before{content:"";width:30px;height:1px;background:var(--accent);display:inline-block}
+  h1{
+    font-family:var(--font);font-weight:700;
+    font-size:clamp(32px,5vw,52px);line-height:1.1;margin:0;letter-spacing:-.01em;
+  }
+  h1 em{color:var(--fluid);font-style:normal}
+  .sub{color:var(--muted);font-size:17px;margin-top:14px;max-width:none;line-height:1.75}
+
+  .grid{display:grid;grid-template-columns:1fr 360px;gap:18px;margin-top:26px}
+  @media(max-width:860px){.grid{grid-template-columns:1fr}}
+
+  .stage{
+    background:linear-gradient(180deg,var(--bg2),#0a1417);
+    border:1px solid var(--line);border-radius:14px;overflow:hidden;position:relative;
+    box-shadow:0 24px 60px -30px #000;
+  }
+  canvas{display:block;width:100%;height:auto}
+  .stage .legend{
+    position:absolute;top:12px;left:14px;font-size:14px;color:var(--muted);
+    display:flex;flex-direction:column;gap:7px;pointer-events:none;
+  }
+  .legend .row{display:flex;align-items:center;gap:8px}
+  .swatch{width:14px;height:3px;border-radius:2px;display:inline-block}
+
+  .panel{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:18px 18px 20px;display:flex;flex-direction:column;gap:18px;
+    box-shadow:0 24px 60px -30px #000;height:fit-content;
+  }
+  .ctrl label{display:flex;justify-content:space-between;align-items:baseline;
+    font-size:19px;color:var(--ink);margin-bottom:10px;letter-spacing:.01em}
+  .ctrl .val{font-weight:700;color:var(--fluid);font-size:24px}
+  .ctrl .val span{color:var(--muted);font-weight:400;font-size:16px;margin-left:2px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;
+    border-radius:4px;background:var(--line);outline:none;cursor:pointer;margin:2px 0}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;
+    border-radius:50%;background:var(--fluid);border:2px solid #0c1418;
+    box-shadow:0 0 0 3px rgba(65,214,195,.18);transition:transform .1s}
+  input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.18)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:2px solid #0c1418;
+    border-radius:50%;background:var(--fluid)}
+
+  .presets{display:flex;gap:8px}
+  .presets button{flex:1;font-family:inherit;font-size:14px;letter-spacing:.03em;
+    background:transparent;color:var(--muted);border:1px solid var(--line);
+    padding:10px 4px;border-radius:8px;cursor:pointer;transition:.15s}
+  .presets button:hover{color:var(--ink);border-color:var(--fluid-dim);background:#0e2329}
+
+  .seg-wrap{display:flex;flex-direction:column;gap:8px}
+  .seg-label{font-size:16px;color:var(--ink);letter-spacing:.01em}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{flex:1;font-family:inherit;font-size:14px;letter-spacing:.02em;color:var(--muted);
+    background:transparent;border:none;padding:10px 4px;cursor:pointer;transition:.15s}
+  .seg button + button{border-left:1px solid var(--line)}
+  .seg button:hover{color:var(--ink);background:#0e2329}
+  .seg button.active{background:var(--shear);color:#1a1030;font-weight:700}
+
+  .readout{border-top:1px solid var(--line);padding-top:18px;display:grid;gap:14px}
+  .stat{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;row-gap:2px}
+  .stat .k{font-size:17px;color:var(--ink);letter-spacing:.02em}
+  .stat .v{font-family:var(--font);font-weight:700;font-size:30px;color:var(--fluid);margin-left:auto}
+  .stat .v.amber{color:var(--vec)}
+  .stat .v.shear{color:var(--shear-bright)}
+  .stat .v small{font-size:16px;color:var(--muted);font-weight:400;font-family:var(--font)}
+
+  .formula{background:#0b181c;border:1px solid var(--line);border-radius:10px;
+    padding:14px 16px;font-size:16px;color:var(--ink);line-height:1.7;text-align:center}
+  .formula .big{font-family:var(--font);font-size:20px;letter-spacing:.01em}
+  .formula .frac{display:inline-flex;flex-direction:column;vertical-align:middle;
+    text-align:center;margin:0 3px}
+  .formula .frac > span:first-child{border-bottom:1px solid var(--muted);padding:0 4px}
+  .note{font-size:15px;color:var(--muted);line-height:1.7}
+  .note b{color:var(--fluid)}
+
+  .foot{margin-top:24px;font-size:15px;color:var(--muted);line-height:1.75}
+  .pill{display:inline-block;border:1px solid var(--line);border-radius:999px;
+    padding:3px 12px;font-size:13px;color:var(--muted);letter-spacing:.04em}
+
+  .langsw{position:absolute;top:2px;right:0;display:inline-flex;border:1px solid var(--line);
+    border-radius:999px;overflow:hidden;background:#0b181c}
+  .langsw button{font-family:inherit;font-size:14px;letter-spacing:.02em;color:var(--muted);
+    background:transparent;border:none;padding:8px 15px;cursor:pointer;transition:.15s}
+  .langsw button:hover{color:var(--ink)}
+  .langsw button.active{background:var(--fluid);color:#06231f;font-weight:700}
+  .langsw button + button{border-left:1px solid var(--line)}
+  @media(max-width:560px){.langsw{position:static;margin-bottom:16px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="langsw" role="group" aria-label="Language">
+      <button data-lang="en">English</button>
+      <button data-lang="zh">中文</button>
+      <button data-lang="ja" class="active">日本語</button>
+    </div>
+    <div class="kicker" data-i18n="kicker">Fluid Mechanics · 粘性のデモ</div>
+    <h1 data-i18n="h1">斜面を流れる<em>粘性流体</em>の速度分布</h1>
+    <p class="sub" data-i18n="sub">一定の厚みの液膜が重力で斜面を流れるときの定常層流（Nusselt 膜流れ）。
+    速度はベクトルの長さで表しています。壁では速度ゼロ（すべりなし条件）、自由表面で最大の
+    <b style="color:var(--vec)">放物線状</b>の分布になります。粘性 μ を上げると全体が遅くなる — これが粘性の効果です。</p>
+  </header>
+
+  <div class="grid">
+    <div class="stage">
+      <div class="legend">
+        <div class="row"><span class="swatch" style="background:var(--vec)"></span><span data-i18n="legVec">速度ベクトル u(y)</span></div>
+        <div class="row"><span class="swatch" style="background:var(--shear)"></span><span data-i18n="legShear">せん断応力 τ(y)</span></div>
+        <div class="row"><span class="swatch" style="background:var(--fluid)"></span><span data-i18n="legFluid">自由表面・流体</span></div>
+        <div class="row"><span class="swatch" style="background:var(--grav)"></span><span data-i18n="legGrav">重力 g</span></div>
+      </div>
+      <canvas id="cv"></canvas>
+    </div>
+
+    <div class="panel">
+      <div class="ctrl">
+        <label><span data-i18n="ctrlAngle">坂の角度 θ</span> <span class="val"><span id="vAngle">22</span><span>°</span></span></label>
+        <input id="angle" type="range" min="0" max="90" step="0.5" value="22">
+      </div>
+      <div class="ctrl">
+        <label><span data-i18n="ctrlH">流体の厚み h</span> <span class="val"><span id="vH">1.2</span><span> mm</span></span></label>
+        <input id="h" type="range" min="0.3" max="5" step="0.05" value="1.2">
+      </div>
+      <div class="ctrl">
+        <label><span data-i18n="ctrlMu">粘性 μ</span> <span class="val"><span id="vMu">4</span><span> mPa·s</span></span></label>
+        <input id="mu" type="range" min="1" max="40" step="0.5" value="4">
+      </div>
+
+      <div class="presets">
+        <button data-mu="1" data-i18n="presetWater">水 (1)</button>
+        <button data-mu="8" data-i18n="presetOil">油 (8)</button>
+        <button data-mu="40" data-i18n="presetHoney">蜂蜜 (40)</button>
+      </div>
+
+      <div class="seg-wrap">
+        <span class="seg-label" data-i18n="ctrlShow">表示</span>
+        <div class="seg" role="group">
+          <button data-show="v" class="active" data-i18n="showV">速度</button>
+          <button data-show="s" data-i18n="showS">せん断応力</button>
+          <button data-show="both" data-i18n="showBoth">両方</button>
+        </div>
+      </div>
+
+      <div class="readout">
+        <div class="stat"><span class="k" data-i18n="statSurf">表面速度 u(h)</span><span class="v amber" id="oSurf">–</span></div>
+        <div class="stat"><span class="k" data-i18n="statMean">平均速度 ū</span><span class="v" id="oMean">–</span></div>
+        <div class="stat"><span class="k" data-i18n="statQ">流量 q（単位幅あたり）</span><span class="v" id="oQ">–</span></div>
+        <div class="stat"><span class="k" data-i18n="statRe">レイノルズ数 Re</span><span class="v" id="oRe">–</span></div>
+        <div class="stat"><span class="k" data-i18n="statTau">壁面せん断応力 τw</span><span class="v shear" id="oTau">–</span></div>
+      </div>
+
+      <div class="formula">
+        <span class="big">u(y) =
+          <span class="frac"><span>ρ g sinθ</span><span>μ</span></span>
+          ( h y − <span class="frac"><span>y²</span><span>2</span></span> )</span>
+      </div>
+      <p class="note" data-i18n="note">y は壁面（y=0）から自由表面（y=h）までの高さ。表面速度は
+        <b>u(h) ∝ h²·sinθ / μ</b> なので、厚みを2倍にすると約4倍、粘性を2倍にすると約半分になります。</p>
+      <p class="note" data-i18n="noteTau">せん断応力 τ(y)=ρg sinθ(h−y) は壁面で最大・自由表面でゼロの直線分布で、粘性 μ には依存しません。重力で決まる応力を、粘性が速度に変換しています。</p>
+    </div>
+  </div>
+
+  <p class="foot">
+    <span class="pill" data-i18n="pill">層流の仮定</span> <span data-i18n="foot">密度 ρ = 1000 kg/m³、g = 9.81 m/s² を一定としています。
+    ベクトルの縮尺は固定なので、角度・厚み・粘性を変えたときの長さの違いがそのまま速度の違いを表します。
+    Re が数百を超えると実際には波立ち（層流の仮定が崩れ始める）が起こります。</span>
+  </p>
+</div>
+
+<script>
+(function(){
+  const RHO=1000, G=9.81;
+
+  // --- 多言語辞書 ---
+  const I18N={
+    ja:{
+      docTitle:"斜面を流れる粘性流体 — 速度分布シミュレーション",
+      kicker:"Fluid Mechanics · 粘性のデモ",
+      h1:'斜面を流れる<em>粘性流体</em>の速度分布',
+      sub:'一定の厚みの液膜が重力で斜面を流れるときの定常層流（Nusselt 膜流れ）。速度はベクトルの長さで表しています。壁では速度ゼロ（すべりなし条件）、自由表面で最大の<b style="color:var(--vec)">放物線状</b>の分布になります。粘性 μ を上げると全体が遅くなる — これが粘性の効果です。',
+      legVec:"速度ベクトル u(y)", legFluid:"自由表面・流体", legGrav:"重力 g",
+      ctrlAngle:"坂の角度 θ", ctrlH:"流体の厚み h", ctrlMu:"粘性 μ",
+      presetWater:"水 (1)", presetOil:"油 (8)", presetHoney:"蜂蜜 (40)",
+      statSurf:"表面速度 u(h)", statMean:"平均速度 ū", statQ:"流量 q（単位幅あたり）", statRe:"レイノルズ数 Re",
+      note:'y は壁面（y=0）から自由表面（y=h）までの高さ。表面速度は<b>u(h) ∝ h²·sinθ / μ</b> なので、厚みを2倍にすると約4倍、粘性を2倍にすると約半分になります。',
+      pill:"層流の仮定",
+      foot:'密度 ρ = 1000 kg/m³、g = 9.81 m/s² を一定としています。ベクトルの縮尺は固定なので、角度・厚み・粘性を変えたときの長さの違いがそのまま速度の違いを表します。Re が数百を超えると実際には波立ち（層流の仮定が崩れ始める）が起こります。',
+      cvNoSlip:"u = 0  すべりなし", cvMax:"u 最大（自由表面）",
+      reLam:"層流", reCaution:"要注意",
+      ctrlShow:"表示", showV:"速度", showS:"せん断応力", showBoth:"両方",
+      legShear:"せん断応力 τ(y)", statTau:"壁面せん断応力 τw", cvTauWall:"τ 最大（壁面）",
+      noteTau:'せん断応力 τ(y)=ρg sinθ(h−y) は壁面で最大・自由表面でゼロの直線分布で、粘性 μ には依存しません。重力で決まる応力を、粘性が速度に変換しています。「両方」表示では応力を紫の三角形・破線で示し、流れと同じ向きに重ねています。'
+    },
+    en:{
+      docTitle:"Viscous Film Flow on a Slope — Velocity Profile Simulation",
+      kicker:"Fluid Mechanics · Viscosity Demo",
+      h1:'Velocity profile of a <em>viscous fluid</em> on a slope',
+      sub:'Steady laminar flow of a film of constant thickness running down a slope under gravity (Nusselt film flow). Velocity is shown by the length of each vector: zero at the wall (no-slip condition) and maximum at the free surface — a <b style="color:var(--vec)">parabolic</b> profile. Raising the viscosity μ slows everything down — that is the effect of viscosity.',
+      legVec:"Velocity vector u(y)", legFluid:"Free surface / fluid", legGrav:"Gravity g",
+      ctrlAngle:"Slope angle θ", ctrlH:"Film thickness h", ctrlMu:"Viscosity μ",
+      presetWater:"Water (1)", presetOil:"Oil (8)", presetHoney:"Honey (40)",
+      statSurf:"Surface velocity u(h)", statMean:"Mean velocity ū", statQ:"Flow rate q (per unit width)", statRe:"Reynolds number Re",
+      note:'y is the height from the wall (y=0) to the free surface (y=h). Since the surface velocity <b>u(h) ∝ h²·sinθ / μ</b>, doubling the thickness makes it about 4× faster and doubling the viscosity halves it.',
+      pill:"Laminar assumption",
+      foot:'Density ρ = 1000 kg/m³ and g = 9.81 m/s² are held constant. The vector scale is fixed, so differences in length when you change the angle, thickness, or viscosity directly reflect differences in speed. Once Re exceeds a few hundred, surface waves appear in reality and the laminar assumption begins to break down.',
+      cvNoSlip:"u = 0  no-slip", cvMax:"u max (free surface)",
+      reLam:"laminar", reCaution:"caution",
+      ctrlShow:"Display", showV:"Velocity", showS:"Shear stress", showBoth:"Both",
+      legShear:"Shear stress τ(y)", statTau:"Wall shear stress τw", cvTauWall:"τ max (wall)",
+      noteTau:'The shear stress τ(y)=ρg sinθ(h−y) is linear — maximum at the wall and zero at the free surface — and does not depend on μ. Gravity sets the stress; viscosity converts it into velocity. In the Both view, τ is shown as a violet triangle with a dashed envelope, pointing in the same flow direction.'
+    },
+    zh:{
+      docTitle:"斜面上的黏性流体 — 速度分布模拟",
+      kicker:"流体力学 · 黏性演示",
+      h1:'斜面上<em>黏性流体</em>的速度分布',
+      sub:'一定厚度的液膜在重力作用下沿斜面流动的定常层流（Nusselt 膜流动）。速度用矢量长度表示：在壁面处为零（无滑移条件），在自由表面处最大，呈<b style="color:var(--vec)">抛物线</b>分布。增大黏度 μ 会使整体变慢——这就是黏性的作用。',
+      legVec:"速度矢量 u(y)", legFluid:"自由表面 / 流体", legGrav:"重力 g",
+      ctrlAngle:"斜面角度 θ", ctrlH:"流体厚度 h", ctrlMu:"黏度 μ",
+      presetWater:"水 (1)", presetOil:"油 (8)", presetHoney:"蜂蜜 (40)",
+      statSurf:"表面速度 u(h)", statMean:"平均速度 ū", statQ:"流量 q（单位宽度）", statRe:"雷诺数 Re",
+      note:'y 为从壁面（y=0）到自由表面（y=h）的高度。由于表面速度 <b>u(h) ∝ h²·sinθ / μ</b>，厚度加倍时约变为 4 倍，黏度加倍时约减半。',
+      pill:"层流假设",
+      foot:'密度 ρ = 1000 kg/m³、g = 9.81 m/s² 取为常数。矢量比例固定，因此改变角度、厚度或黏度时长度的差异直接反映速度的差异。当 Re 超过数百时，实际会出现表面波动，层流假设开始失效。',
+      cvNoSlip:"u = 0  无滑移", cvMax:"u 最大（自由表面）",
+      reLam:"层流", reCaution:"注意",
+      ctrlShow:"显示", showV:"速度", showS:"剪应力", showBoth:"两者",
+      legShear:"剪应力 τ(y)", statTau:"壁面剪应力 τw", cvTauWall:"τ 最大（壁面）",
+      noteTau:'剪应力 τ(y)=ρg sinθ(h−y) 呈线性分布——壁面处最大、自由表面处为零，且与黏度 μ 无关。重力决定应力，黏性将其转化为速度。在“两者”视图中，τ 以紫色三角形和虚线包络表示，并与流动方向一致。'
+    }
+  };
+  let lang="ja";
+  let T=I18N[lang];
+
+  const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+  const state={angle:22, h:1.2, mu:4, show:'v'};
+  let W=900, H=520, DPR=1;
+
+  // --- 物理 ---
+  function physics(){
+    const th=state.angle*Math.PI/180;
+    const h=state.h/1000;            // m
+    const mu=state.mu/1000;          // Pa·s
+    const k=RHO*G*Math.sin(th)/mu;   // 1/(m·s) 係数
+    const uS=k*h*h/2;                // 表面速度 m/s
+    const uM=2/3*uS;                 // 平均速度
+    const q=uM*h;                    // 単位幅流量 m²/s
+    const Re=RHO*uM*h/mu;
+    const tauW=RHO*G*Math.sin(th)*h;   // 壁面せん断応力 Pa
+    return {th,h,mu,k,uS,uM,q,Re,tauW};
+  }
+  function uAt(y,p){ return p.k*(p.h*y - y*y/2); }   // y[m] -> m/s
+  function tauAt(y,p){ return RHO*G*Math.sin(p.th)*(p.h-y); }  // y[m] -> Pa（壁で最大・表面で0、μに無依存）
+
+  // 全可動範囲での最大速度から固定の縮尺を決める（はみ出さず、相対差は保たれる）
+  function refMaxU(){
+    const th=90*Math.PI/180, h=5/1000, mu=1/1000;
+    return RHO*G*Math.sin(th)/mu*h*h/2;
+  }
+  const REF=refMaxU();
+  function refMaxTau(){ return RHO*G*Math.sin(90*Math.PI/180)*(5/1000); } // θ90,h5mmでの壁応力
+  const REF_TAU=refMaxTau();
+
+  // --- 描画ジオメトリ ---
+  const THICK_PX_PER_MM=18;          // 膜厚の見かけスケール
+  function geom(p){
+    const cos=Math.cos(p.th), sin=Math.sin(p.th);
+    const d={x:cos,y:sin}, n={x:sin,y:-cos};   // 斜面方向 / 法線(上向き)
+    const hPx=state.h*THICK_PX_PER_MM;
+    let L=W*0.82;
+    const drop=L*sin;
+    if(drop+hPx+60>H) L*= (H-hPx-60)/Math.max(drop,1);
+    // 中心寄せ
+    const xs=[0,L*d.x,hPx*n.x,L*d.x+hPx*n.x];
+    const ys=[0,L*d.y,hPx*n.y,L*d.y+hPx*n.y];
+    const minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys);
+    const A={x:(W-(maxx-minx))/2-minx, y:(H-(maxy-miny))/2-miny};
+    const velScale=(L*0.55)/REF;       // m/s -> px
+    const tauScale=(L*0.55)/REF_TAU;   // Pa -> px
+    return {d,n,hPx,L,A,velScale,tauScale};
+  }
+
+  // --- 粒子 ---
+  const N=170, parts=[];
+  for(let i=0;i<N;i++) parts.push({s:Math.random(), f:Math.pow(Math.random(),0.85)});
+
+  function arrow(x1,y1,x2,y2,color,w){
+    const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy);
+    ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=w;
+    ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    if(len>6){
+      const a=Math.atan2(dy,dx), hs=Math.min(8,len*0.5);
+      ctx.beginPath();
+      ctx.moveTo(x2,y2);
+      ctx.lineTo(x2-hs*Math.cos(a-0.42), y2-hs*Math.sin(a-0.42));
+      ctx.lineTo(x2-hs*Math.cos(a+0.42), y2-hs*Math.sin(a+0.42));
+      ctx.closePath(); ctx.fill();
+    }
+  }
+
+  let last=performance.now();
+  function frame(now){
+    const dt=Math.min(0.05,(now-last)/1000); last=now;
+    const p=physics(), gm=geom(p);
+    const {d,n,hPx,L,A,velScale,tauScale}=gm;
+
+    ctx.clearRect(0,0,W,H);
+
+    // 背景グリッド
+    ctx.strokeStyle='rgba(255,255,255,0.025)'; ctx.lineWidth=1;
+    for(let gx=0;gx<W;gx+=34){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+    for(let gy=0;gy<H;gy+=34){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+
+    const w0=A;                                   // 壁・上端
+    const w1={x:A.x+L*d.x, y:A.y+L*d.y};          // 壁・下端
+    const t0={x:w0.x+hPx*n.x, y:w0.y+hPx*n.y};    // 表面・上端
+    const t1={x:w1.x+hPx*n.x, y:w1.y+hPx*n.y};    // 表面・下端
+
+    // 地面（壁の下側を充填＋ハッチング）
+    const deep=600;
+    ctx.fillStyle=getCss('--ground');
+    ctx.beginPath();
+    ctx.moveTo(w0.x,w0.y); ctx.lineTo(w1.x,w1.y);
+    ctx.lineTo(w1.x-n.x*deep, w1.y-n.y*deep);
+    ctx.lineTo(w0.x-n.x*deep, w0.y-n.y*deep);
+    ctx.closePath(); ctx.fill();
+    // ハッチ
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(w0.x,w0.y); ctx.lineTo(w1.x,w1.y);
+    ctx.lineTo(w1.x-n.x*40, w1.y-n.y*40);
+    ctx.lineTo(w0.x-n.x*40, w0.y-n.y*40); ctx.closePath(); ctx.clip();
+    ctx.strokeStyle='rgba(127,163,160,0.25)'; ctx.lineWidth=1;
+    for(let s=-40;s<L+40;s+=12){
+      const bx=w0.x+s*d.x, by=w0.y+s*d.y;
+      ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(bx-n.x*40+d.x*14, by-n.y*40+d.y*14); ctx.stroke();
+    }
+    ctx.restore();
+
+    // 流体（半透明）
+    const grad=ctx.createLinearGradient(w0.x,w0.y,t0.x,t0.y);
+    grad.addColorStop(0,'rgba(65,214,195,0.05)');
+    grad.addColorStop(1,'rgba(65,214,195,0.20)');
+    ctx.fillStyle=grad;
+    ctx.beginPath();
+    ctx.moveTo(w0.x,w0.y); ctx.lineTo(w1.x,w1.y); ctx.lineTo(t1.x,t1.y); ctx.lineTo(t0.x,t0.y);
+    ctx.closePath(); ctx.fill();
+
+    // 粒子
+    for(const pt of parts){
+      const yPhys=pt.f*p.h;
+      const vpx=uAt(yPhys,p)*velScale*0.9;       // px/s
+      pt.s += (vpx/Math.max(L,1))*dt;
+      if(pt.s>1) pt.s-=1;
+      const sPx=pt.s*L, off=pt.f*hPx;
+      const x=A.x+sPx*d.x+off*n.x, y=A.y+sPx*d.y+off*n.y;
+      const sp=Math.min(1,(uAt(yPhys,p))/(REF*0.5));
+      ctx.fillStyle=`rgba(${Math.round(120+135*sp)},${Math.round(230)},${Math.round(220-40*sp)},${0.35+0.5*sp})`;
+      ctx.beginPath(); ctx.arc(x,y,1.7+1.6*sp,0,7); ctx.fill();
+    }
+
+    // 自由表面ライン
+    ctx.strokeStyle=getCss('--fluid'); ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(t0.x,t0.y); ctx.lineTo(t1.x,t1.y); ctx.stroke();
+    // 壁ライン
+    ctx.strokeStyle='rgba(127,163,160,0.7)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(w0.x,w0.y); ctx.lineTo(w1.x,w1.y); ctx.stroke();
+
+    // === 測定断面での速度ベクトル（放物線分布） ===
+    const s0=L*0.46;
+    const cutW={x:A.x+s0*d.x, y:A.y+s0*d.y};
+    const cutT={x:cutW.x+hPx*n.x, y:cutW.y+hPx*n.y};
+    // 断面線
+    ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(cutW.x,cutW.y); ctx.lineTo(cutT.x,cutT.y); ctx.stroke();
+    ctx.setLineDash([]);
+
+    const tips=[];
+    const M=11;
+    const showV = state.show!=='s';
+    const showS = state.show!=='v';
+
+    // === せん断応力 τ(y)=ρg sinθ(h−y)：壁で最大・表面でゼロの直線分布 ===
+    // 常に流れの方向（斜面下向き）に描く。速度との区別は、塗り三角形・破線の包絡線・色で行う
+    let tauWallTip=null;
+    if(showS){
+      const sd = {x:d.x, y:d.y};
+      const stips=[];
+      for(let i=0;i<=M;i++){
+        const f=i/M, tl=tauAt(f*p.h,p)*tauScale;
+        const bx=cutW.x+f*hPx*n.x, by=cutW.y+f*hPx*n.y;
+        stips.push({bx,by, x:bx+sd.x*tl, y:by+sd.y*tl});
+      }
+      tauWallTip=stips[0];
+      // 三角形の塗り
+      ctx.fillStyle='rgba(199,146,234,0.18)';
+      ctx.beginPath(); ctx.moveTo(cutW.x,cutW.y);
+      for(const t of stips) ctx.lineTo(t.x,t.y);
+      ctx.lineTo(cutT.x,cutT.y); ctx.closePath(); ctx.fill();
+      // 全層の矢印（半透明にして、上に重なる速度と区別）
+      for(let i=0;i<=M;i++){
+        const t=stips[i];
+        arrow(t.bx,t.by,t.x,t.y, i===0?getCss('--shear-bright'):'rgba(199,146,234,0.75)', i===0?2.6:1.7);
+        ctx.fillStyle='rgba(199,146,234,0.85)';
+        ctx.beginPath(); ctx.arc(t.bx,t.by,2,0,7); ctx.fill();
+      }
+      // 直線の包絡線（破線）
+      ctx.strokeStyle=getCss('--shear-bright'); ctx.lineWidth=2; ctx.setLineDash([6,4]);
+      ctx.beginPath(); ctx.moveTo(stips[0].x,stips[0].y); ctx.lineTo(cutT.x,cutT.y); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // === 速度ベクトル u(y)：放物線分布 ===
+    if(showV){
+      for(let i=0;i<=M;i++){
+        const f=i/M, yPhys=f*p.h;
+        const bx=cutW.x+f*hPx*n.x, by=cutW.y+f*hPx*n.y;
+        const vlen=uAt(yPhys,p)*velScale;
+        const ex=bx+d.x*vlen, ey=by+d.y*vlen;
+        tips.push({x:ex,y:ey});
+        arrow(bx,by,ex,ey, i===M? getCss('--vec-bright'):getCss('--vec'), i===M?2.4:1.8);
+        ctx.fillStyle='rgba(255,183,77,0.9)';
+        ctx.beginPath(); ctx.arc(bx,by,2,0,7); ctx.fill();
+      }
+      // 放物線の包絡線
+      ctx.strokeStyle='rgba(255,208,137,0.85)'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(cutW.x,cutW.y);
+      for(const t of tips) ctx.lineTo(t.x,t.y);
+      ctx.stroke();
+    }
+
+    // ラベル
+    const CF='"Calibri","Segoe UI","Meiryo",sans-serif';
+    ctx.font='15px '+CF;
+    if(showV){
+      ctx.fillStyle=getCss('--muted');
+      label(T.cvNoSlip, cutW.x-6+ d.x*4, cutW.y+16, 'right');
+      ctx.fillStyle=getCss('--vec-bright');
+      label(T.cvMax, tips[M].x+8, tips[M].y-2,'left');
+    }
+    if(showS && tauWallTip){
+      ctx.fillStyle=getCss('--shear-bright');
+      label(T.cvTauWall, tauWallTip.x+8, tauWallTip.y + (showV?18:-2), 'left');
+    }
+
+    // 重力ベクトル
+    const gx=W-72, gy=58, gl=46;
+    arrow(gx,gy,gx,gy+gl,getCss('--grav'),2.4);
+    ctx.fillStyle=getCss('--grav'); ctx.font='bold 18px '+CF;
+    label('g', gx+9, gy+gl, 'left');
+
+    // 角度の弧
+    drawAngleArc(w0, d, p.th);
+
+    updateReadout(p);
+    requestAnimationFrame(frame);
+  }
+
+  function drawAngleArc(origin, d, th){
+    // 水平線と斜面の間の角度を origin（壁の上端付近）に描く
+    const r=46;
+    const ax=origin.x, ay=origin.y;
+    ctx.strokeStyle='rgba(127,163,160,0.5)'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(ax+r*1.4,ay); ctx.stroke();   // 水平参照
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(ax,ay,r,0,th); ctx.stroke();
+    ctx.fillStyle=getCss('--muted'); ctx.font='15px "Calibri","Segoe UI","Meiryo",sans-serif';
+    ctx.fillText('θ='+state.angle.toFixed(0)+'°', ax+r+6, ay+ (th>0.2? r*0.5:14));
+  }
+
+  function label(txt,x,y,align){ ctx.textAlign=align||'left'; ctx.fillText(txt,x,y); ctx.textAlign='left'; }
+
+  function updateReadout(p){
+    document.getElementById('oSurf').innerHTML=(p.uS*100).toFixed(1)+' <small>cm/s</small>';
+    document.getElementById('oMean').innerHTML=(p.uM*100).toFixed(1)+' <small>cm/s</small>';
+    document.getElementById('oQ').innerHTML=(p.q*1e4).toFixed(1)+' <small>cm²/s</small>';
+    document.getElementById('oRe').innerHTML=p.Re.toFixed(0)+' <small>'+(p.Re<400?T.reLam:T.reCaution)+'</small>';
+    document.getElementById('oTau').innerHTML=p.tauW.toFixed(p.tauW<10?2:1)+' <small>Pa</small>';
+  }
+
+  // --- CSS変数取得（キャッシュ）---
+  const cssCache={};
+  function getCss(name){ return cssCache[name] || (cssCache[name]=getComputedStyle(document.documentElement).getPropertyValue(name).trim()); }
+
+  // --- リサイズ ---
+  function resize(){
+    const rect=cv.parentElement.getBoundingClientRect();
+    W=Math.max(360,Math.floor(rect.width));
+    H=Math.round(Math.min(560, Math.max(420, W*0.6)));
+    DPR=window.devicePixelRatio||1;
+    cv.width=W*DPR; cv.height=H*DPR;
+    cv.style.height=H+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize',resize);
+
+  // --- 入力 ---
+  function bind(id,key,fmtId,fmt){
+    const el=document.getElementById(id);
+    el.addEventListener('input',()=>{ state[key]=parseFloat(el.value);
+      document.getElementById(fmtId).textContent=fmt?fmt(state[key]):state[key]; });
+  }
+  bind('angle','angle','vAngle',v=>v.toFixed(0));
+  bind('h','h','vH',v=>v.toFixed(2));
+  bind('mu','mu','vMu',v=>v.toFixed(0));
+  document.querySelectorAll('.presets button').forEach(b=>{
+    b.addEventListener('click',()=>{ state.mu=parseFloat(b.dataset.mu);
+      document.getElementById('mu').value=state.mu;
+      document.getElementById('vMu').textContent=state.mu.toFixed(0); });
+  });
+  document.querySelectorAll('.seg button').forEach(b=>{
+    b.addEventListener('click',()=>{ state.show=b.dataset.show;
+      document.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('active', x===b)); });
+  });
+
+  // --- 言語切り替え ---
+  function applyLang(l){
+    lang=l; T=I18N[l];
+    document.documentElement.lang = (l==='zh') ? 'zh-Hans' : l;
+    document.title=T.docTitle;
+    document.querySelectorAll('[data-i18n]').forEach(el=>{
+      const k=el.getAttribute('data-i18n');
+      if(T[k]!==undefined) el.innerHTML=T[k];
+    });
+    document.querySelectorAll('.langsw button').forEach(b=>{
+      b.classList.toggle('active', b.dataset.lang===l);
+    });
+  }
+  document.querySelectorAll('.langsw button').forEach(b=>{
+    b.addEventListener('click',()=>applyLang(b.dataset.lang));
+  });
+  applyLang('ja');
+
+  resize();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
